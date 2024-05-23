@@ -1,37 +1,39 @@
-<Configuration>
-	<Name>Voyager OPAC Search</Name>
-	<Author>Atlas Systems, Inc.</Author>
-	<Version>1.3.1</Version>
-	<Active>true</Active>
-
-	<Description>Performs a Voyager OPAC title search with option for a keyword search as well. Once on a results page, Import Info will copy the call number and location values.</Description>
-
-	<Forms>
-		<Form>FormRequest</Form>
-	</Forms>	
-
-	<Settings>
-		<Setting name="OPACURL" value="" type="string">
-			<Description>The URL for your Voyager OPAC. (i.e. http://catalog.princeton.edu)</Description> 
-		</Setting>
-		<Setting name="TomcatWebvoyage" value="False" type="boolean">
-			<Description>Indicates if the catalog uses Tomcat Webvoyage if true. When false, the classic webvoyage is used.</Description> 
-		</Setting>
-		<Setting name="TomcatLocationLabelSpanClass" value="fieldLabelSpan" type="string">
-			<Description><![CDATA[The CSS class for the span surrounding the location label. e.g. <span class="fieldLabelSpan">Location:</span>]]></Description> 
-		</Setting>		
-		<Setting name="TomcatLocationValueSpanClass" value="subfieldData" type="string">
-			<Description><![CDATA[The CSS class for the span surrounding the location value. e.g. <span class="subfieldData">LAW Library</span>]]></Description> 
-		</Setting>
-		<Setting name="TomcatCallNumberLabelSpanClass" value="fieldLabelSpan" type="string">
-			<Description><![CDATA[The CSS class for the span surrounding the call number label. e.g. <span class="fieldLabelSpan">Call Number:</span>]]></Description> 
-		</Setting>		
-		<Setting name="TomcatCallNumberValueSpanClass" value="subfieldData" type="string">
-			<Description><![CDATA[The CSS class for the span surrounding the call number value. e.g. <span class="subfieldData">HN59.2 .S624 2000</span>]]></Description> 
-		</Setting>
-	</Settings>
-
-	<Files>
-		<File>VoyagerOPAC.lua</File>
-	</Files>
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Name>Voyager OPAC Search</Name>
+  <Author>Atlas Systems, Inc.</Author>
+  <Version>2.0.0</Version>
+  <Active>True</Active>
+  <Type>Addon</Type>
+  <Description>Performs a Voyager OPAC title search with option for a keyword search as well. Once on a results page, Import Info will copy the call number and location values.</Description>
+  <Forms>
+    <Form>FormRequest</Form>
+  </Forms>
+  <Permissions />
+  <Settings>
+    <Setting name="OPACURL" value="" type="string">
+      <Description>The URL for your Voyager OPAC. (i.e. http://catalog.princeton.edu)</Description>
+    </Setting>
+    <Setting name="TomcatWebvoyage" value="False" type="boolean">
+      <Description>Indicates if the catalog uses Tomcat Webvoyage if true. When false, the Classic WebVoyage is used.</Description>
+    </Setting>
+    <Setting name="TomcatLocationLabelSpanClass" value="fieldLabelSpan" type="string">
+      <Description>The CSS class for the span surrounding the location label. e.g. &lt;span class="fieldLabelSpan"&gt;Location:&lt;/span&gt;</Description>
+    </Setting>
+    <Setting name="TomcatLocationValueSpanClass" value="subfieldData" type="string">
+      <Description>The CSS class for the span surrounding the location value. e.g. &lt;span class="subfieldData"&gt;LAW Library&lt;/span&gt;</Description>
+    </Setting>
+    <Setting name="TomcatCallNumberLabelSpanClass" value="fieldLabelSpan" type="string">
+      <Description>The CSS class for the span surrounding the call number label. e.g. &lt;span class="fieldLabelSpan"&gt;Call Number:&lt;/span&gt;</Description>
+    </Setting>
+    <Setting name="TomcatCallNumberValueSpanClass" value="subfieldData" type="string">
+      <Description>The CSS class for the span surrounding the call number value. e.g. &lt;span class="subfieldData"&gt;HN59.2 .S624 2000&lt;/span&gt;</Description>
+    </Setting>
+    <Setting name="ClassicKeywordValue" value="FT*" type="string">
+      <Description>The value for the keyword search option for Classic WebVoyage.  e.g. &lt;OPTION SELECTED VALUE="FT*"&gt;Keyword&lt;/OPTION&gt;</Description>
+    </Setting>
+  </Settings>
+  <Files>
+    <File>VoyagerOPAC.lua</File>
+  </Files>
 </Configuration>

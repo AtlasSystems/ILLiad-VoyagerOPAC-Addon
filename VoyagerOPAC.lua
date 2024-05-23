@@ -5,6 +5,7 @@ settings.LocationLabelClass =  GetSetting("TomcatLocationLabelSpanClass");
 settings.LocationValueClass =  GetSetting("TomcatLocationValueSpanClass");
 settings.CallNumberLabelClass =  GetSetting("TomcatCallNumberLabelSpanClass");
 settings.CallNumberValueClass =  GetSetting("TomcatCallNumberValueSpanClass");
+settings.ClassicKeywordValue = GetSetting("ClassicKeywordValue");
 
 local interfaceMngr = nil;
 local opacForm = {};
@@ -16,96 +17,101 @@ local searchTerm = nil;
 local searchCode = nil;
 local searchBox = "querybox";
 
---[[
-	When inserting a new HtmlElement into an existing HtmlElement, the method InsertAdjacentElement() requires a parameter of type HtmlElementInsertionOrientation.
-	HtmlElementInsertionOrientation is a .NET enumeration that does not correspond to any of Lua's basic data types, so we are importing it using Lua's assembly
-	import functionality.  Once we have a reference to the type from luanet.import_type, we will store it in a table named 'types' so that we can easily refer to
-	it when inserting the new HtmlElement.
---]]
-local types = {};
-luanet.load_assembly("System.Windows.Forms");
-types["System.Windows.Forms.HtmlElementInsertionOrientation"] = luanet.import_type("System.Windows.Forms.HtmlElementInsertionOrientation");
-
 function Init()
     interfaceMngr = GetInterfaceManager();
-    
+
 	-- Create a form
 	opacForm.Form = interfaceMngr:CreateForm("OPAC Search", "Script");
-	
+
 	-- Add a browser
-	opacForm.Browser = opacForm.Form:CreateBrowser("OPAC Search", "OPAC Search Browser", "OPAC Search");
-	
+	opacForm.Browser = opacForm.Form:CreateBrowser("OPAC Search", "OPAC Search Browser", "OPAC Search", "WebView2");
+
 	-- Hide the text label
 	opacForm.Browser.TextVisible = false;
-	
+
 	-- Since we didn't create a ribbon explicitly before creating our browser, it will have created one using the name we passed the CreateBrowser method.  We can retrieve that one and add our buttons to it.
 	opacForm.RibbonPage = opacForm.Form:GetRibbonPage("OPAC Search");
-	
+
 	-- Create the search and import buttons.
 	opacForm.RibbonPage:CreateButton("Search Keyword", GetClientImage("Search32"), "SearchKeyword", "OPAC");
-    opacForm.RibbonPage:CreateButton("Search Title", GetClientImage("Search32"), "SearchTitle", "OPAC");    
-	
+    opacForm.RibbonPage:CreateButton("Search Title", GetClientImage("Search32"), "SearchTitle", "OPAC");
+
 	-- Set the SearchForm
 	if settings.Tomcat == false then
-		searchBox = "querybox";	
+		searchBox = "querybox";
 		opacForm.RibbonPage:CreateButton("Import Info", GetClientImage("Search32"), "ImportInfo", "OPAC");
 	else
 		searchBox = "searchBasic";
 	end
-		
+
 	-- After we add all of our buttons and form elements, we can show the form.
 	opacForm.Form:Show();
-   
+
     SearchTitle();
 end
 
 function SetSearchTerm()
 	if GetFieldValue("Transaction", "RequestType") == "Loan" then
-		searchTerm = GetFieldValue("Transaction", "LoanTitle");		
+		searchTerm = GetFieldValue("Transaction", "LoanTitle");
 	else
 		searchTerm = GetFieldValue("Transaction", "PhotoJournalTitle");
 	end
 end
 
 function SearchKeyword()
-	
+
 	SetSearchTerm();
-		
+
 	if settings.Tomcat == false then
-		searchCode = "GKEY^";		
+		searchCode = settings.ClassicKeywordValue;
 	else
-		searchCode = "GKEY^*";	
+		searchCode = "GKEY^*";
 	end
-	
-	opacForm.Browser:RegisterPageHandler("formExists", searchBox , "OPACLoaded", true);	
-	opacForm.Browser:Navigate(settings.OpacUrl);	
+
+	opacForm.Browser:RegisterPageHandler("formExists", searchBox , "OPACLoaded", true);
+	opacForm.Browser:Navigate(settings.OpacUrl);
 end
 
 function SearchTitle()
-    
+
 	SetSearchTerm();
-	
+
 	if GetFieldValue("Transaction", "RequestType") == "Loan" then
 		searchCode = "TALL";
     else
 		searchCode = "JALL";
-    end	
+    end
 
-	opacForm.Browser:RegisterPageHandler("formExists", searchBox, "OPACLoaded", true);	
-	opacForm.Browser:Navigate(settings.OpacUrl);	
+	opacForm.Browser:RegisterPageHandler("formExists", searchBox, "OPACLoaded", true);
+	opacForm.Browser:Navigate(settings.OpacUrl);
 end
 
 function OPACLoaded()
 	LogDebug("OPAC Loaded");
-	if settings.Tomcat == false then
-		opacForm.Browser:SetFormValue(searchBox, "search_arg", searchTerm);
-		opacForm.Browser:SetFormValue(searchBox, "search_code", searchCode);		
-	else
-		opacForm.Browser:SetFormValue(searchBox, "searchArg", searchTerm);
-		opacForm.Browser:SetFormValue(searchBox, "searchCode", searchCode);		
-		opacForm.Browser:RegisterPageHandler("custom", "CheckHoldingsPageLoaded", "HoldingsPageLoaded", false);		
+
+	local scriptArgs = {settings.Tomcat, searchBox, searchTerm, searchCode};
+	local searchFormScript = [[
+		(function (useTomcat, searchBox, searchTerm, searchCode) {
+			if (useTomcat == false){
+				document.getElementById("Search_Arg").value = searchTerm;
+				document.getElementById("Search_Code").value = searchCode;
+
+				document.getElementsByName(searchBox)[0].submit();
+			}
+			else{
+				document.getElementById("searchArg").value = searchTerm;
+				document.getElementById("searchCode").value = searchCode;
+
+				document.getElementById(searchBox).submit();
+			}
+		})
+	]];
+
+	if settings.Tomcat then
+		opacForm.Browser:RegisterPageHandler("custom", "CheckHoldingsPageLoaded", "HoldingsPageLoaded", false);
 	end
-	opacForm.Browser:SubmitForm(searchBox);	
+
+	opacForm.Browser:ExecuteScript(searchFormScript, scriptArgs);
 end
 
 function ImportInfo()
@@ -115,171 +121,145 @@ function ImportInfo()
 end
 
 function ImportInfoClassic()
-	local obrowser = opacForm.Browser.WebBrowser;	
-	local document = obrowser.Document;
-	local detailsTable = opacForm.Browser:GetElementByCollectionIndex(document:GetElementsByTagName("Table"), 1);
-	
-	local detailRows = detailsTable:GetElementsByTagName("TR");
-	
-	LogDebug("Found " .. detailRows.Count .. " rows.");
-	
-	for i =0, detailRows.Count - 1 do
-		local row = opacForm.Browser:GetElementByCollectionIndex(detailRows, i);
+	local importInfoClassicScript = [[
+		var detailsTable = document.getElementsByTagName("Table")[1];
+		var detailRows = detailsTable.getElementsByTagName("TR");
 		
-		LogDebug("Row has " .. row.Children.Count .. " children.");
+		window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("LogDebug", "Found " + detailRows.length + " rows.");
 		
-		if row.Children.Count > 1 then
-			
-			local header = opacForm.Browser:GetElementByCollectionIndex(row.Children, 0);
-			local value = opacForm.Browser:GetElementByCollectionIndex(row.Children, 1);
-			
-			if header.InnerText ~= nil then
-				LogDebug("Header Text: " .. header.InnerText);
-			end
-			
-			if value.InnerText ~= nil then
-				LogDebug("Value Text: " .. value.InnerText);
-			end
-			
-			if header.InnerText == "Call number:" then
-				SetFieldValue("Transaction", "CallNumber", value.InnerText);
-			elseif header.InnerText == "Location:" then
-				SetFieldValue("Transaction", "Location", value.InnerText);
-			end
-		end
+		for (let row of detailRows){
+			window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("LogDebug", "Row has " + row.childElementCount + " children.");
 		
-		i = i + 1;
-	end
-	
+			if (row.childElementCount > 1){
+				var header = row.children[0];
+				var value = row.children[1];
+		
+				if (header.innerText != null){
+					window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("LogDebug", "Header Text: " + header.innerText);
+				}
+		
+				if (value.innerText != null){
+					window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("LogDebug", "Value Text: " + value.innerText);
+				}
+		
+				if (header.innerText.toLowerCase() == "call number:"){
+					window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("SetFieldValue", "Transaction", "CallNumber", value.innerText);
+				}
+				else if (header.innerText.toLowerCase() == "location:"){
+					window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("SetFieldValue", "Transaction", "Location", value.innerText);
+				}
+			}
+		}
+	]];
+
+	opacForm.Browser:ExecuteScript(importInfoClassicScript);
+
 	ExecuteCommand("SwitchTab", {"Detail"});
 end
 
 function CheckHoldingsPageLoaded()
-	LogDebug("Checking if Holdings Page is loaded");
-	
-	local obrowser = opacForm.Browser.WebBrowser;	
-	local document = obrowser.Document;
-	
-	local holdingsList = document:GetElementsByTagName('ul');
-	
-	LogDebug("Found " .. holdingsList.Count .. " ULs.");
-	
-	local holdingsEnumerator = holdingsList:GetEnumerator();
-	while holdingsEnumerator:MoveNext() do
-		local row = holdingsEnumerator.Current;
-		local ulTitle = row:GetAttribute("title");
+	local checkHoldingsPageLoadedScript = [[
+		(function(){
+			window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("LogDebug", "Checking if Holdings Page is loaded.");
 
-		if ulTitle == "Bibliographic Record Display" then			
-			return true;								
-		end
-	end
-	
-	return false;
-end
-			
-function HoldingsPageLoaded()	
-	InjectImportButtons();	
-	opacForm.Browser:RegisterPageHandler("custom", "CheckHoldingsPageLoaded", "HoldingsPageLoaded", false);		
+			var holdingsList = document.getElementsByTagName("ul");
+
+			window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("LogDebug", "Found " + holdingsList.length + " ULs.");
+
+			for (let row of holdingsList){
+				if (row.getAttribute("title") == "Bibliographic Record Display"){
+					return "True";
+				}
+			}
+			return "False";
+		})()
+	]];
+
+	return opacForm.Browser:EvaluateScript(checkHoldingsPageLoadedScript).Result == "True";
 end
 
-function ImportHolding(row)	
-	local liList = row:GetElementsByTagName('li');
-	LogDebug("Found " .. liList.Count .. " holdings record LIs.");
-	
-	local liEnumerator = liList:GetEnumerator();
-	while liEnumerator:MoveNext() do
-		local liRow = liEnumerator.Current;
-		local liClass = liRow:GetAttribute("className");			
-		
-		if string.match(liClass:upper(), "BIBTAG") == "BIBTAG" then
-			local spanList = liRow:GetElementsByTagName('span');
-			LogDebug("Found " .. spanList.Count .. " bibTag spans.");
-			
-			local lastSpanText = "";
-			local spanEnumerator = spanList:GetEnumerator();
-			while spanEnumerator:MoveNext() do
-				spanRow = spanEnumerator.current;
-				local spanClass = spanRow:GetAttribute("className");						
-				
-				LogDebug("Last Span Text: " .. lastSpanText);
-				LogDebug("Current Span Class: " .. spanClass);
-				LogDebug("Current Span Text: " .. spanRow.InnerText);
-				
-				if spanClass == settings.LocationValueClass and lastSpanText == "Location:" then						
-					SetFieldValue("Transaction", "Location", spanRow.InnerText);
-				end;
-				
-				if spanClass == settings.CallNumberValueClass and lastSpanText == "Call Number:" then						
-					SetFieldValue("Transaction", "CallNumber", spanRow.InnerText);
-				end;
-				
-				if (spanClass == settings.LocationLabelClass) or (spanClass == settings.CallNumberLabelClass)  then						
-					lastSpanText = spanRow.InnerText;
-				else 
-					lastSpanText = "";
-				end;				
-			end					
-		end						
-	end
-	
+function HoldingsPageLoaded()
+	InjectImportButtons();
+	opacForm.Browser:RegisterPageHandler("custom", "CheckHoldingsPageLoaded", "HoldingsPageLoaded", false);
+end
+
+function ImportHolding(location, callNumber)
+	SetFieldValue("Transaction", "Location", location);
+	SetFieldValue("Transaction", "CallNumber", callNumber);
+
 	ExecuteCommand("SwitchTab", {"Detail"});
 end
 
 function InjectImportButtons()
-	local obrowser = opacForm.Browser.WebBrowser;	
-	local document = obrowser.Document;
-	
-	local holdingsList = document:GetElementsByTagName('div');
-	
-	LogDebug("Found " .. holdingsList.Count .. " ULs.");
-	
-	local holdingsEnumerator = holdingsList:GetEnumerator();
-	while holdingsEnumerator:MoveNext() do
-		local hRow = holdingsEnumerator.Current;
-		local rowClass = hRow:GetAttribute("className");			
+	local injectImportButtonsScript = [[
+		(function (locationLabelClass, callNumberLabelClass) {
+			var displayHoldingsList = document.getElementsByClassName("displayHoldings");
 		
-		if rowClass == "displayHoldings" then
-			local divList = hRow.Children;
-			
-			local divEnumerator = divList:GetEnumerator();
-			while divEnumerator:MoveNext() do
-				local row = divEnumerator.Current;
-				rowClass = row:GetAttribute("className");			
+			for (let holdingsRow of displayHoldingsList){
+				var divList = holdingsRow.children;
+		
+				for (let row of divList){
+					var rowClass = row.getAttribute("class");
+		
+					if (rowClass == "oddHoldingsRow" || rowClass == "evenHoldingsRow"){
+						// Make sure we haven't already injected our import button into the div.
+						// This can happen as a result of the page handler being called more than once.
+						var alreadyInjected = false;
+		
+						var inputList = row.getElementsByTagName("INPUT");
+		
+						for (let button of inputList){
+							if (button.getAttribute("title") == "atlas-import"){
+								alreadyInjected = true;
+								break;
+							}
+						}
+		
+						if (alreadyInjected == false){
+							var liElement = document.createElement("li");
+							liElement.setAttribute("class", "bibTag");
+		
+							var inputElement = document.createElement("INPUT");
+							inputElement.setAttribute("title", "atlas-import");
+							inputElement.setAttribute("type", "button");
+							inputElement.setAttribute("value", "Import");
+		
+							row.insertAdjacentElement("beforeend", liElement);
+							liElement.appendChild(inputElement);
+		
+							let location = "";
+							let callNumber = "";
+		
+							var spanList = row.getElementsByTagName("span");
+		
+							for (let i = 0; i < spanList.length; i++){
+								var spanClass = spanList[i].getAttribute("class");
+		
+								// The span with the value always comes after the label.
+								if (spanClass == locationLabelClass && spanList[i].innerText == "Location:"){
+									
+									// Because the span containing the location has nested divs that also contain text, this is necesssary
+									// to extract only the location text.
+									location = [].reduce.call(spanList[i+1].childNodes, function(result, childNode) { return result + (childNode.nodeType === 3 ? childNode.textContent : ''); }, '');
+								}
+		
+								if (spanClass == callNumberLabelClass && spanList[i].innerText == "Call Number:"){
+									callNumber = spanList[i+1].innerText;
+								}
 								
-				if rowClass == "oddHoldingsRow" or rowClass == "evenHoldingsRow" then		
-					local alreadyInjected = false;
-					
-					--Make sure we have not already injected our import button into the div
-					--This can happen as a result of the page handler being called upon more than once
-					local inputList = row:GetElementsByTagName("INPUT");	
-					local inputEnumerator = inputList:GetEnumerator();
-					while inputEnumerator:MoveNext() do
-						local button = inputEnumerator.Current;				
-						local buttonClass = button:GetAttribute("title");												
-						if buttonClass == "atlas-import" then		
-							alreadyInjected = true;
-							break;
-						end
-					end
-					
-					if alreadyInjected == false then
-						local liElement = document:CreateElement("li");		
-						liElement:SetAttribute("className", "bibTag");
-						
-						local inputElement = document:CreateElement("INPUT");
-						inputElement:SetAttribute("title", "atlas-import");
-						inputElement:SetAttribute("type", "button");
-						inputElement:SetAttribute("value", "Import");
+								if (location != "" && callNumber != ""){
+									break;
+								}
+								
+							}
 
-						row:InsertAdjacentElement(types["System.Windows.Forms.HtmlElementInsertionOrientation"].BeforeEnd, liElement);
-						liElement:AppendChild(inputElement);
-						
-						inputElement:add_Click(function(a) ImportHolding(row) end);	
-					end
-				end										
-			end		
-		end
-	end
-end	
-	
-	
+							inputElement.onclick = function(){ window.chrome.webview.hostObjects.sync.atlasAddon.ExecuteAddonFunction("ImportHolding", location, callNumber)} ;
+						}
+					}
+				}
+			}
+		})
+	]];
+
+	opacForm.Browser:ExecuteScript(injectImportButtonsScript, {settings.LocationLabelClass, settings.CallNumberLabelClass});
+end
