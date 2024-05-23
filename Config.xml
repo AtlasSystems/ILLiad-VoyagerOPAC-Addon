@@ -5,7 +5,7 @@
   <Version>2.0.0</Version>
   <Active>True</Active>
   <Type>Addon</Type>
-  <Description>Performs a Voyager OPAC title search with option for a keyword search as well. Once on a results page, Import Info will copy the call number and location values.</Description>
+  <Description>Performs a Voyager OPAC title search with option for a keyword search as well. Once on a results page, Import Info will copy the call number and location values. If the TomcatWebvoyage setting is set to true, Import buttons will be inserted into the page for each holding.</Description>
   <Forms>
     <Form>FormRequest</Form>
   </Forms>
